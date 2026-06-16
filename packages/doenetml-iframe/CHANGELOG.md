@@ -1,5 +1,37 @@
 # @doenet/doenetml
 
+## 0.7.21
+
+### Patch Changes
+
+- d2f8b05: Image: resolve `source="doenet:<id>"` against a configurable media URL.
+
+    When an `<image>` specifies `source="doenet:abcdefg"`, the image now loads from `doenetMediaUrl + "/" + imageId` (the middle slash is omitted when `doenetMediaUrl` already ends with `/`). The `doenetMediaUrl` is a new optional prop on `<DoenetViewer>` and `<DoenetEditor>` (defaulting to `https://doenet.org/api/media`), mirroring the existing `doenetViewerUrl` prop.
+
+    Only a source that is exactly `doenet:<id>` (an alphanumeric id) is treated as a media reference; any other `doenet:` source (such as a legacy `doenet:cid=<hash>` form) renders the image placeholder rather than requesting an unknown URL.
+
+- 6764722: Image: add open-license attribution to `<image>`.
+
+    `<image>` gains a set of new attributes for crediting open-licensed images. A new `licenseCodes` attribute accepts a fixed set of open-license codes (the Creative Commons licenses, `CC0`, `PDM`, plus `GFDL`, `FAL`, `OGL`, `MIT`, and `APACHE-2.0`); codes are matched case-insensitively and offered in editor autocomplete in their canonical case, and specifying two codes marks the image as dual-licensed. A new `licenseVersion` attribute selects the Creative Commons URL version (default `4.0`; ignored by other licenses). From the codes the worker derives public `licenseNames` and `licenseUrls`. New `licenseName`/`licenseUrl` attributes provide a fallback used only when no `licenseCodes` are given.
+
+    New optional attributes `imageName`, `authorName`, `authorUrl`, and `originalUrl` supply the rest of the attribution. The viewer renders a Creative Commons "TASL"-style credit sentence (e.g. `"Squirrel" by Jane Doe is licensed under a Creative Commons Attribution 4.0 license.`) at the bottom of the image's `<description>` — and shows the same description disclosure UI even when no `<description>` is authored. The license clause is phrased by kind: Creative Commons reads "a <name> <version> license", other licenses read "the <name>", and public-domain dedications read "is in the public domain (<name>)"; dual licenses are joined with "or".
+
+    The recognized license list is exported from `@doenet/doenetml` and `@doenet/doenetml-iframe` (`mediaLicenses`, `getMediaLicenseInfo`, `getMediaLicenseDisplay`, `creativeCommonsVersions`, `defaultCreativeCommonsVersion`, and the `MediaLicenseInfo` / `MediaLicenseKind` / `MediaLicenseDisplay` / `CreativeCommonsVersion` types) so embedding apps can build their own license pickers from the same source of truth.
+
+- 9b48416: Editor: support enumerated `validValues` on list-valued attributes (e.g. `createComponentOfType: "textList"`).
+
+    When an attribute declares `validValues`, it is now interpreted per-item on a list-valued attribute: every item of the list must be one of the listed values. This flows through schema generation (the attribute is marked as a list of keywords), so editor autocomplete suggests the allowed values, the context-sensitive help panel labels them "Allowed values (one per item)", and the reference docs render the value table with a list type. The schema-violation check validates each whitespace-separated item rather than the whole value, and at runtime invalid items are dropped with a diagnostic. `<sideBySide>`/`<sbsGroup>` `valign`/`valigns` are migrated as the first worked example.
+
+- 49327a0: Section-wide check work: add a `maxNumAttempts` attribute and rename `documentWideCheckWork` to `sectionWideCheckWork`.
+
+    Any container that supports `sectionWideCheckWork` (`<section>`, `<problem>`, `<exercise>`, `<example>`, `<p>`, `<li>`, `<div>`, `<span>`, lists, and the document) now also accepts `maxNumAttempts`. Just like a per-`<answer>` `maxNumAttempts`, each submission counts as one attempt: pressing the section-wide "Check Work" button submits and uses up an attempt, and pressing the button again does nothing until one of the inputs changes (returning the button to "Check Work"). The number of attempts remaining is shown next to the button, and once the attempts are exhausted every `<answer>` inside the container becomes disabled and the button is disabled.
+
+    The document's `documentWideCheckWork` attribute is renamed to `sectionWideCheckWork` so the document shares the same abstraction as other containers. `documentWideCheckWork` continues to work as a deprecated alias (with a deprecation warning).
+
+    Within a `sectionWideCheckWork` container, the attempt count is controlled solely by that container. A `maxNumAttempts` set on an enclosed `<answer>` — or on a nested `sectionWideCheckWork` container — is ignored, and DoenetML emits a warning suggesting that `maxNumAttempts` be set on the (outer) container instead.
+
+    Closes #1308.
+
 ## 0.7.20
 
 ### Patch Changes
