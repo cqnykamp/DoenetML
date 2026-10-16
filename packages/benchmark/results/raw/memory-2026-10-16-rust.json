@@ -1,0 +1,77 @@
+[
+  {
+    "core": "rust",
+    "name": "blank",
+    "workers": 0,
+    "frames": 1,
+    "mainRealmJsHeapMB": 1,
+    "totalPssMB": 274,
+    "byType": {
+      "browser": 94,
+      "zygote": 31,
+      "gpu-process": 32,
+      "utility": 49,
+      "renderer": 69
+    }
+  },
+  {
+    "core": "rust",
+    "name": "iframe-1",
+    "workers": 1,
+    "frames": 2,
+    "mainRealmJsHeapMB": 60,
+    "totalPssMB": 453,
+    "byType": {
+      "browser": 96,
+      "zygote": 30,
+      "gpu-process": 32,
+      "utility": 49,
+      "renderer": 246
+    }
+  },
+  {
+    "core": "rust",
+    "name": "iframe-4",
+    "workers": 4,
+    "frames": 5,
+    "mainRealmJsHeapMB": 142,
+    "totalPssMB": 829,
+    "byType": {
+      "browser": 97,
+      "zygote": 31,
+      "gpu-process": 33,
+      "utility": 49,
+      "renderer": 619
+    }
+  },
+  {
+    "core": "rust",
+    "name": "repeat-25",
+    "workers": 1,
+    "frames": 2,
+    "mainRealmJsHeapMB": 60,
+    "totalPssMB": 456,
+    "byType": {
+      "browser": 95,
+      "zygote": 31,
+      "gpu-process": 33,
+      "utility": 48,
+      "renderer": 249
+    }
+  },
+  {
+    "core": "rust",
+    "name": "repeat-250",
+    "workers": 1,
+    "frames": 2,
+    "mainRealmJsHeapMB": 60,
+    "totalPssMB": 457,
+    "byType": {
+      "browser": 96,
+      "zygote": 31,
+      "gpu-process": 32,
+      "utility": 48,
+      "renderer": 250
+    }
+  }
+]

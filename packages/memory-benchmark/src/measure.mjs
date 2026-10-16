@@ -391,7 +391,10 @@ async function runScenario({ name, url, expectInitialized }, idx) {
 
 const opts = parseArgs();
 
-if (!fs.existsSync(path.join(STANDALONE_DIST, "doenet-standalone.js"))) {
+if (
+    opts.core === "javascript" &&
+    !fs.existsSync(path.join(STANDALONE_DIST, "doenet-standalone.js"))
+) {
     console.error(
         `Built standalone bundle not found at ${STANDALONE_DIST}.\n` +
             "Run: npm run build -w @doenet/standalone",
