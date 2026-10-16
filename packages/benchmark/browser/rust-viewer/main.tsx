@@ -2,6 +2,9 @@
 // mounted with the Rust core and driven from `window.__rust`: load a source,
 // say when it has rendered, resolve a name, dispatch an action as a renderer
 // would. Imports the prototype's sources so the store is the viewer's own.
+// The prototype's entry first: its modules import one another in a cycle
+// that only resolves in the order the entry sets.
+import "../../../doenetml-prototype/src/index";
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { Provider } from "react-redux";
@@ -14,7 +17,6 @@ import {
     getWorker,
 } from "../../../doenetml-prototype/src/state/redux-slices/core/thunks";
 import { numberFromSerializedAst } from "../../../doenetml-prototype/src/utils/math/math-expression-utils";
-import "../../../doenetml-prototype/src/styles/index.css";
 
 const root = createRoot(document.getElementById("root")!);
 const flags = {
@@ -23,22 +25,40 @@ const flags = {
     allowLocalState: false,
 };
 
+/** A render that throws ends the load with its message instead of a blank page. */
+class Boundary extends React.Component<{ children: React.ReactNode }> {
+    state = { failed: false };
+    static getDerivedStateFromError() {
+        return { failed: true };
+    }
+    componentDidCatch(e: Error) {
+        rust.renderError = e.message;
+    }
+    render() {
+        return this.state.failed ? null : this.props.children;
+    }
+}
+
 const rust = {
     ready: false,
+    renderError: null as string | null,
     /** Render `source`; resolves once the core has returned its first flat DAST. */
     async loadSource(source: string) {
         rust.ready = false;
+        rust.renderError = null;
         root.render(
-            <Provider store={store}>
-                <MathJaxContext>
-                    <PageViewer
-                        source={source}
-                        flags={flags}
-                        darkMode="light"
-                        coreType="rust"
-                    />
-                </MathJaxContext>
-            </Provider>,
+            <Boundary>
+                <Provider store={store}>
+                    <MathJaxContext>
+                        <PageViewer
+                            source={source}
+                            flags={flags}
+                            darkMode="light"
+                            coreType="rust"
+                        />
+                    </MathJaxContext>
+                </Provider>
+            </Boundary>,
         );
         for (;;) {
             const s = store.getState();
