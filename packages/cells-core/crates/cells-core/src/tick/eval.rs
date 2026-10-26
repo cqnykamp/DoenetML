@@ -36,18 +36,10 @@ impl Evaluator for FullRecompute {
 /// word are one mask, those in later words a short list of masks.
 #[derive(Debug, Clone)]
 pub struct DirtyClosure {
-    /// near[i] = readers of instruction `i`'s output within `i`'s own word,
-    /// for an instruction with one output; 0 for one with several.
-    near: Vec<u64>,
-    /// far[far_start[i]..far_start[i + 1]] = readers of instruction `i`'s
-    /// output in later words, one mask per word, ascending; empty for an
-    /// instruction with several outputs.
-    far_start: Vec<u32>,
+    /// readers[i] = where instruction `i`'s readers are, one record per
+    /// instruction so a step touches one line of it.
+    readers: Vec<Readers>,
     far: Vec<Marks>,
-    /// One bit per schedule position: the instructions with several
-    /// outputs, whose readers are marked per changed output through
-    /// `cell_marks`, so an output that did not change marks nothing.
-    multi: Vec<u64>,
     /// cell_marks[cell_start[cell]..cell_start[cell + 1]] = readers of
     /// `cell`, one mask per word, ascending: for the seeds and the outputs
     /// of instructions with several outputs.
@@ -57,6 +49,21 @@ pub struct DirtyClosure {
     dirty: Vec<u64>,
 }
 
+/// The readers of one instruction's output.
+#[derive(Debug, Clone, Copy, Default)]
+struct Readers {
+    /// Readers within the instruction's own word.
+    near: u64,
+    /// far[far_start..far_start + far_len] = readers in later words, one
+    /// mask per word, ascending. `far_len` is `MULTI` for an instruction
+    /// with several outputs, whose readers are marked per changed output
+    /// through `cell_marks`, so an output that did not change marks nothing.
+    far_start: u32,
+    far_len: u32,
+}
+
+const MULTI: u32 = u32::MAX;
+
 /// Instructions to mark in one word of the bitset.
 #[derive(Debug, Clone, Copy)]
 struct Marks {
@@ -64,11 +71,12 @@ struct Marks {
     mask: u64,
 }
 
-/// Group the ascending schedule positions `readers` into one mask per word.
+/// Append the ascending schedule positions `readers`, one mask per word.
 fn group(readers: &[u32], out: &mut Vec<Marks>) {
+    let start = out.len();
     for &i in readers {
         let (word, bit) = (i / 64, 1u64 << (i % 64));
-        match out.last_mut() {
+        match out[start..].last_mut() {
             Some(m) if m.word == word => m.mask |= bit,
             _ => out.push(Marks { word, mask: bit }),
         }
@@ -95,43 +103,39 @@ impl DirtyClosure {
                 fill[input as usize] += 1;
             }
         }
-        let readers = |c: usize| &dependents[dep_start[c] as usize..dep_start[c + 1] as usize];
+        let readers_of = |c: usize| &dependents[dep_start[c] as usize..dep_start[c + 1] as usize];
 
         let mut cell_start = Vec::with_capacity(n_cells + 1);
         let mut cell_marks = Vec::new();
         cell_start.push(0);
         for c in 0..n_cells {
-            group(readers(c), &mut cell_marks);
+            group(readers_of(c), &mut cell_marks);
             cell_start.push(cell_marks.len() as u32);
         }
 
         let n = program.len();
-        let mut near = vec![0u64; n];
-        let mut far_start = Vec::with_capacity(n + 1);
+        let mut readers = vec![Readers::default(); n];
         let mut far = Vec::new();
-        let mut multi = vec![0u64; n.div_ceil(64)];
-        far_start.push(0);
         for (i, ins) in program.instrs.iter().enumerate() {
+            let r = &mut readers[i];
+            r.far_start = far.len() as u32;
             if ins.op.n_out() == 1 {
                 let c = ins.out as usize;
-                let marks = &cell_marks[cell_start[c] as usize..cell_start[c + 1] as usize];
-                for m in marks {
+                for m in &cell_marks[cell_start[c] as usize..cell_start[c + 1] as usize] {
                     if m.word as usize == i / 64 {
-                        near[i] = m.mask;
+                        r.near = m.mask;
                     } else {
                         far.push(*m);
                     }
                 }
+                r.far_len = far.len() as u32 - r.far_start;
             } else {
-                multi[i / 64] |= 1 << (i % 64);
+                r.far_len = MULTI;
             }
-            far_start.push(far.len() as u32);
         }
         DirtyClosure {
-            near,
-            far_start,
+            readers,
             far,
-            multi,
             cell_start,
             cell_marks,
             dirty: vec![0; n.div_ceil(64)],
@@ -221,7 +225,6 @@ impl Evaluator for DirtyClosure {
         let mut w = lo;
         while w <= hi {
             let mut bits = std::mem::take(&mut self.dirty[w]);
-            let multi = self.multi[w];
             while bits != 0 {
                 let b = bits.trailing_zeros() as usize;
                 bits &= bits - 1;
@@ -232,9 +235,10 @@ impl Evaluator for DirtyClosure {
                     continue;
                 }
                 // Readers come later in the schedule: above bit `b`, or in a later word.
-                if multi >> b & 1 == 0 {
-                    bits |= self.near[i];
-                    let (s, e) = (self.far_start[i] as usize, self.far_start[i + 1] as usize);
+                let r = self.readers[i];
+                if r.far_len != MULTI {
+                    bits |= r.near;
+                    let (s, e) = (r.far_start as usize, (r.far_start + r.far_len) as usize);
                     for m in &self.far[s..e] {
                         self.dirty[m.word as usize] |= m.mask;
                     }
