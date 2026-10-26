@@ -42,7 +42,7 @@ pub struct DirtyClosure {
     far: Vec<Marks>,
     /// cell_marks[cell_start[cell]..cell_start[cell + 1]] = readers of
     /// `cell`, one mask per word, ascending: for the seeds and the outputs
-    /// of instructions with several outputs.
+    /// of instructions with several outputs; empty for every other cell.
     cell_start: Vec<u32>,
     cell_marks: Vec<Marks>,
     /// One bit per schedule position; all clear between ticks.
@@ -105,23 +105,34 @@ impl DirtyClosure {
         }
         let readers_of = |c: usize| &dependents[dep_start[c] as usize..dep_start[c + 1] as usize];
 
+        // Only cells no instruction writes (the seeds) and the outputs of
+        // instructions with several outputs are marked per cell; every
+        // other cell's readers are in its writer's record.
+        let per_cell = |c: usize| {
+            let p = program.producer[c];
+            p == u32::MAX || program.instrs[p as usize].op.n_out() != 1
+        };
         let mut cell_start = Vec::with_capacity(n_cells + 1);
         let mut cell_marks = Vec::new();
         cell_start.push(0);
         for c in 0..n_cells {
-            group(readers_of(c), &mut cell_marks);
+            if per_cell(c) {
+                group(readers_of(c), &mut cell_marks);
+            }
             cell_start.push(cell_marks.len() as u32);
         }
 
         let n = program.len();
         let mut readers = vec![Readers::default(); n];
         let mut far = Vec::new();
+        let mut marks = Vec::new();
         for (i, ins) in program.instrs.iter().enumerate() {
             let r = &mut readers[i];
             r.far_start = far.len() as u32;
             if ins.op.n_out() == 1 {
-                let c = ins.out as usize;
-                for m in &cell_marks[cell_start[c] as usize..cell_start[c + 1] as usize] {
+                marks.clear();
+                group(readers_of(ins.out as usize), &mut marks);
+                for m in &marks {
                     if m.word as usize == i / 64 {
                         r.near = m.mask;
                     } else {
