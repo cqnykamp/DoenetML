@@ -48,6 +48,7 @@ impl Default for LoadOptions {
 pub struct LoadTimings {
     pub deserialize: Duration,
     pub build: Duration,
+    /// The schedule, and the tick's tables for the settled program.
     pub schedule: Duration,
     pub initial_compute: Duration,
     /// The load check, part of `build`: the probe build that stands for
@@ -166,6 +167,10 @@ impl Document {
             t.initial_compute += clock.elapsed();
             t.passes += 1;
             if doc.structure_settled() {
+                // The tick's tables, counted with the schedule they follow.
+                let clock = web_time::Instant::now();
+                doc.ready_evaluator();
+                t.schedule += clock.elapsed();
                 t.structural_depth = doc.structure.structural_depth;
                 let _s = crate::trace::span("attributes");
                 doc.literal_attrs = Arc::new(crate::dast::LiteralAttrs::new(&dast));
@@ -293,6 +298,11 @@ impl Document {
             if doc.structure_settled() {
                 doc.literal_attrs = self.literal_attrs.clone();
                 doc.evaluator = self.evaluator.fresh();
+                let clock = web_time::Instant::now();
+                doc.ready_evaluator();
+                if profile {
+                    eprintln!("rebuild/tables: {:.2?}", clock.elapsed());
+                }
                 result = Ok(doc);
                 break;
             }

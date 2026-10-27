@@ -156,15 +156,15 @@ impl DirtyClosure {
 
 /// How a document recomputes after a tick's writes: what it holds and
 /// ticks with (`Document::request`). A dirty closure's tables follow the
-/// program they were built for: they are built on the first tick, and a
-/// rebuild's document starts without them (`fresh`), so no caller keeps
-/// them in step by hand and a document never ticked never holds them.
+/// program they were built for: load and rebuild build them (`ready`) for
+/// the program they settle on, so a tick only ticks and no caller keeps
+/// them in step by hand.
 #[derive(Debug, Clone)]
 pub enum Recompute {
     /// Every instruction (`FullRecompute`).
     Full,
     /// The closure of what changed (`DirtyClosure`), what the browser runs;
-    /// None until the first tick.
+    /// None until `ready`.
     DirtyClosure(Option<DirtyClosure>),
 }
 
@@ -191,6 +191,26 @@ impl Recompute {
             Recompute::DirtyClosure(_) => Recompute::DirtyClosure(None),
         }
     }
+
+    /// Heap bytes of the tables it holds.
+    pub fn heap_bytes(&self) -> usize {
+        match self {
+            Recompute::DirtyClosure(Some(d)) => {
+                d.readers.capacity() * std::mem::size_of::<Readers>()
+                    + (d.far.capacity() + d.cell_marks.capacity()) * std::mem::size_of::<Marks>()
+                    + d.cell_start.capacity() * 4
+                    + d.dirty.capacity() * 8
+            }
+            _ => 0,
+        }
+    }
+
+    /// Build what ticking `program` needs, if it is not built yet.
+    pub fn ready(&mut self, program: &Program, n_cells: usize) {
+        if let Recompute::DirtyClosure(d) = self {
+            d.get_or_insert_with(|| DirtyClosure::new(program, n_cells));
+        }
+    }
 }
 
 impl Evaluator for Recompute {
@@ -203,6 +223,7 @@ impl Evaluator for Recompute {
     fn recompute(&mut self, program: &Program, cells: &mut [f64], changed: &mut Vec<CellIdx>) {
         match self {
             Recompute::Full => FullRecompute.recompute(program, cells, changed),
+            // Built by `ready`; here only for a document made without a load.
             Recompute::DirtyClosure(d) => d
                 .get_or_insert_with(|| DirtyClosure::new(program, cells.len()))
                 .recompute(program, cells, changed),

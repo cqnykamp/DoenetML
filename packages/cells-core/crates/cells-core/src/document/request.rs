@@ -51,10 +51,16 @@ impl Document {
         match Recompute::named(name) {
             Some(e) => {
                 self.evaluator = e;
+                self.ready_evaluator();
                 true
             }
             None => false,
         }
+    }
+
+    /// Build what the evaluator needs to tick this document's program.
+    pub(crate) fn ready_evaluator(&mut self) {
+        self.evaluator.ready(&self.program, self.cells.len());
     }
 
     /// The name of how ticks recompute.
